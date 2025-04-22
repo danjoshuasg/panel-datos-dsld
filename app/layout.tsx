@@ -10,7 +10,15 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata = {
   title: "Panel de datos DSLD",
   description: "Panel de datos de las DEMUNA - Dirección de Sistemas Locales y Defensorías",
-  generator: 'DSLD'
+  generator: "DSLD",
+  icons: {
+    icon: [
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/favicon.ico",
+  },
 }
 
 export default function RootLayout({
@@ -20,6 +28,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es" suppressHydrationWarning>
+      <head>
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+      </head>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <AuthProvider>

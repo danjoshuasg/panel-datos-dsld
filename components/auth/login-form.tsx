@@ -55,7 +55,9 @@ export function LoginForm({ onSwitchView }: LoginFormProps) {
           title: "Inicio de sesión exitoso",
           description: "Bienvenido al Panel SISDNA",
         })
-        router.push("/auth/inicio")
+        setTimeout(() => {
+          router.push("/auth/inicio")
+        }, 1000)
       } else {
         toast({
           title: "Error de autenticación",
