@@ -12,12 +12,7 @@ export const metadata = {
   description: "Panel de datos de las DEMUNA - Dirección de Sistemas Locales y Defensorías",
   generator: "DSLD",
   icons: {
-    icon: [
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-    ],
-    shortcut: "/favicon.ico",
-    apple: "/favicon.ico",
+    icon: "/favicon-32x32.png",
   },
 }
 
