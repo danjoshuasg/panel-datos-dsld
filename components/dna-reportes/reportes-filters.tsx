@@ -32,6 +32,16 @@ export default function ReportesFilters({ estadosAcreditacion, loading, onSearch
     setSelectedUbigeo(ubigeoCode)
   }
 
+  // Función para manejar cambios en el estado de acreditación
+  function handleEstadoAcreditacionChange(value: string) {
+    // If se selecciona "all" o "none", reiniciar el filtro
+    if (value === "all" || value === "none") {
+      setEstadoAcreditacion(null)
+    } else {
+      setEstadoAcreditacion(value)
+    }
+  }
+
   // Función para buscar
   function handleSearch() {
     onSearch({
@@ -72,11 +82,14 @@ export default function ReportesFilters({ estadosAcreditacion, loading, onSearch
             <label htmlFor="estado_acreditacion" className="text-sm font-medium text-[#9b0000]">
               Estado de Acreditación
             </label>
-            <Select value={estadoAcreditacion || ""} onValueChange={setEstadoAcreditacion}>
+            <Select value={estadoAcreditacion || ""} onValueChange={handleEstadoAcreditacionChange}>
               <SelectTrigger id="estado_acreditacion" className="border-neutral-300 bg-white text-neutral-800">
                 <SelectValue placeholder="Seleccione estado" className="text-neutral-500" />
               </SelectTrigger>
               <SelectContent className="bg-white">
+                <SelectItem value="none" className="text-neutral-800 hover:bg-neutral-100">
+                  Seleccione estado
+                </SelectItem>
                 <SelectItem value="all" className="text-neutral-800 hover:bg-neutral-100">
                   Todos
                 </SelectItem>

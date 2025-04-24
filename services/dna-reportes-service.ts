@@ -1,5 +1,4 @@
 import { createClient } from "@/utils/supabase/client"
-import { defensoriasService } from "@/services/defensorias-service"
 
 // Interfaces para estadísticas
 export interface DnaStats {
@@ -43,76 +42,192 @@ class DnaReportesService {
   // Obtener estadísticas generales
   async getStats(filters: FiltersState): Promise<DnaStats> {
     try {
-      // Obtener todas las defensorías con los filtros aplicados
-      const result = await defensoriasService.searchDefensorias({
-        ubigeo: filters.ubigeo,
-        codigoDna: "",
-        estadoAcreditacion: filters.estadoAcreditacion,
-        page: 1,
-        pageSize: 1000, // Un número grande para obtener todos los registros
-      })
+      const supabase = createClient()
 
-      const defensorias = result.defensorias
-      const totalDefensorias = defensorias.length
+      // Primero, obtener el conteo total de defensorías
+      let countQuery = supabase.from("defensorias").select("*", { count: "exact", head: true })
 
-      if (totalDefensorias === 0) {
+      // Aplicar filtros si existen
+      if (filters.ubigeo) {
+        const ubigeoLength = filters.ubigeo.replace(/0+$/, "").length
+        if (ubigeoLength <= 2) {
+          countQuery = countQuery.like("nid_ubigeo", filters.ubigeo.substring(0, 2) + "%")
+        } else if (ubigeoLength <= 4) {
+          countQuery = countQuery.like("nid_ubigeo", filters.ubigeo.substring(0, 4) + "%")
+        } else {
+          countQuery = countQuery.eq("nid_ubigeo", filters.ubigeo)
+        }
+      }
+
+      if (filters.estadoAcreditacion && filters.estadoAcreditacion !== "all") {
+        countQuery = countQuery.eq("nid_estado", filters.estadoAcreditacion)
+      }
+
+      const { count: totalDefensorias, error: countError } = await countQuery
+
+      if (countError) {
+        console.error("Error al obtener conteo total:", countError)
         return this.getEmptyStats()
       }
 
-      // Contar por estado de acreditación
-      const estadosCount: Record<string, number> = {}
-      defensorias.forEach((def) => {
-        const estado = def.estado_acreditacion || "No especificado"
-        estadosCount[estado] = (estadosCount[estado] || 0) + 1
+      // Obtener conteos por estado de acreditación
+      const estadosPromises = ["a", "b", "c"].map(async (estadoId) => {
+        let query = supabase.from("defensorias").select("*", { count: "exact", head: true }).eq("nid_estado", estadoId)
+
+        // Aplicar filtro de ubigeo si existe
+        if (filters.ubigeo) {
+          const ubigeoLength = filters.ubigeo.replace(/0+$/, "").length
+          if (ubigeoLength <= 2) {
+            query = query.like("nid_ubigeo", filters.ubigeo.substring(0, 2) + "%")
+          } else if (ubigeoLength <= 4) {
+            query = query.like("nid_ubigeo", filters.ubigeo.substring(0, 4) + "%")
+          } else {
+            query = query.eq("nid_ubigeo", filters.ubigeo)
+          }
+        }
+
+        const { count, error } = await query
+        return { estadoId, count: count || 0, error }
       })
 
-      // Contar por departamento
+      const estadosResults = await Promise.all(estadosPromises)
+
+      // Mapear los IDs de estado a nombres
+      const estadosMap: Record<string, string> = {
+        a: "No Operativa",
+        b: "Acreditada",
+        c: "No Acreditada",
+      }
+
+      // Construir los conteos por estado
+      const acreditadas = estadosResults.find((r) => r.estadoId === "b")?.count || 0
+      const noAcreditadas = estadosResults.find((r) => r.estadoId === "c")?.count || 0
+      const noOperativas = estadosResults.find((r) => r.estadoId === "a")?.count || 0
+
+      // Obtener estadísticas por departamento
+      const { data: depData, error: depError } = await supabase
+        .from("defensorias")
+        .select("nid_ubigeo")
+        .not("nid_ubigeo", "is", null)
+
+      if (depError) {
+        console.error("Error al obtener datos de departamentos:", depError)
+        return {
+          totalDefensorias: totalDefensorias || 0,
+          acreditadas,
+          noAcreditadas,
+          noOperativas,
+          porDepartamento: [],
+          porEstado: [
+            {
+              estado: "Acreditada",
+              cantidad: acreditadas,
+              porcentaje: (acreditadas / (totalDefensorias || 1)) * 100,
+              color: this.getColorForEstado("Acreditada"),
+            },
+            {
+              estado: "No Acreditada",
+              cantidad: noAcreditadas,
+              porcentaje: (noAcreditadas / (totalDefensorias || 1)) * 100,
+              color: this.getColorForEstado("No Acreditada"),
+            },
+            {
+              estado: "No Operativa",
+              cantidad: noOperativas,
+              porcentaje: (noOperativas / (totalDefensorias || 1)) * 100,
+              color: this.getColorForEstado("No Operativa"),
+            },
+          ],
+          porTipo: [],
+        }
+      }
+
+      // Procesar datos por departamento
       const departamentosCount: Record<string, number> = {}
-      defensorias.forEach((def) => {
-        const departamento = def.departamento || "No especificado"
-        departamentosCount[departamento] = (departamentosCount[departamento] || 0) + 1
+      depData?.forEach((def) => {
+        if (def.nid_ubigeo) {
+          const depCode = def.nid_ubigeo.substring(0, 2)
+          departamentosCount[depCode] = (departamentosCount[depCode] || 0) + 1
+        }
       })
 
-      // Contar por tipo de DEMUNA
-      const tiposCount: Record<string, number> = {}
-      defensorias.forEach((def) => {
-        const tipo = def.tipo_demuna || "No especificado"
-        tiposCount[tipo] = (tiposCount[tipo] || 0) + 1
+      // Obtener nombres de departamentos
+      const depCodes = Object.keys(departamentosCount).map((code) => code + "0000")
+      const { data: ubigeos } = await supabase
+        .from("ubigeos")
+        .select("codigo_ubigeo, txt_nombre")
+        .in("codigo_ubigeo", depCodes)
+
+      const ubigeosMap: Record<string, string> = {}
+      ubigeos?.forEach((u) => {
+        ubigeosMap[u.codigo_ubigeo.substring(0, 2)] = u.txt_nombre
       })
 
-      // Preparar estadísticas por departamento
-      const porDepartamento: DepartamentoStat[] = Object.entries(departamentosCount)
-        .map(([departamento, cantidad]) => ({
-          departamento,
+      // Construir estadísticas por departamento
+      const porDepartamento = Object.entries(departamentosCount)
+        .map(([depCode, cantidad]) => ({
+          departamento: ubigeosMap[depCode] || `Departamento ${depCode}`,
           cantidad,
-          porcentaje: (cantidad / totalDefensorias) * 100,
+          porcentaje: (cantidad / (totalDefensorias || 1)) * 100,
         }))
         .sort((a, b) => b.cantidad - a.cantidad)
 
-      // Preparar estadísticas por estado
-      const porEstado: EstadoStat[] = Object.entries(estadosCount).map(([estado, cantidad]) => ({
-        estado,
-        cantidad,
-        porcentaje: (cantidad / totalDefensorias) * 100,
-        color: this.getColorForEstado(estado),
-      }))
+      // Obtener estadísticas por tipo
+      const { data: tiposData } = await supabase.from("defensorias").select("txt_tipo")
 
-      // Preparar estadísticas por tipo
-      const porTipo: TipoStat[] = Object.entries(tiposCount)
-        .map(([tipo, cantidad]) => ({
-          tipo,
+      const tiposCount: Record<string, number> = {}
+      tiposData?.forEach((def) => {
+        const tipo = def.txt_tipo || "No especificado"
+        tiposCount[tipo] = (tiposCount[tipo] || 0) + 1
+      })
+
+      // Obtener nombres de tipos
+      const tiposCodes = Object.keys(tiposCount)
+      const { data: tiposInfo } = await supabase
+        .from("defensorias_caracteristicas")
+        .select("clave_caracteristica, valor_caracteristica")
+        .in("clave_caracteristica", tiposCodes)
+
+      const tiposMap: Record<string, string> = {}
+      tiposInfo?.forEach((t) => {
+        tiposMap[t.clave_caracteristica] = t.valor_caracteristica
+      })
+
+      // Construir estadísticas por tipo
+      const porTipo = Object.entries(tiposCount)
+        .map(([tipoCode, cantidad]) => ({
+          tipo: tiposMap[tipoCode] || `Tipo ${tipoCode}`,
           cantidad,
-          porcentaje: (cantidad / totalDefensorias) * 100,
+          porcentaje: (cantidad / (totalDefensorias || 1)) * 100,
         }))
         .sort((a, b) => b.cantidad - a.cantidad)
 
       return {
-        totalDefensorias,
-        acreditadas: estadosCount["Acreditada"] || 0,
-        noAcreditadas: estadosCount["No Acreditada"] || 0,
-        noOperativas: estadosCount["No Operativa"] || 0,
+        totalDefensorias: totalDefensorias || 0,
+        acreditadas,
+        noAcreditadas,
+        noOperativas,
         porDepartamento,
-        porEstado,
+        porEstado: [
+          {
+            estado: "Acreditada",
+            cantidad: acreditadas,
+            porcentaje: (acreditadas / (totalDefensorias || 1)) * 100,
+            color: this.getColorForEstado("Acreditada"),
+          },
+          {
+            estado: "No Acreditada",
+            cantidad: noAcreditadas,
+            porcentaje: (noAcreditadas / (totalDefensorias || 1)) * 100,
+            color: this.getColorForEstado("No Acreditada"),
+          },
+          {
+            estado: "No Operativa",
+            cantidad: noOperativas,
+            porcentaje: (noOperativas / (totalDefensorias || 1)) * 100,
+            color: this.getColorForEstado("No Operativa"),
+          },
+        ],
         porTipo,
       }
     } catch (error) {
