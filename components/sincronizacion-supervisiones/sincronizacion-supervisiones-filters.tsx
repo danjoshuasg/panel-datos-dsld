@@ -23,16 +23,16 @@ export interface FiltersState {
 }
 
 interface SincronizacionSupervisionesFiltersProps {
-  estadosSincronizacion: EstadoSincronizacion[]
-  supervisores: { codigo_supervisor: number; nombre_supervisor: string }[]
+  estadosSincronizacion?: EstadoSincronizacion[]
+  supervisores?: { codigo_supervisor: number; nombre_supervisor: string }[]
   loading: boolean
   onSearch: (filters: FiltersState) => void
   onClear: () => void
 }
 
 export default function SincronizacionSupervisionesFilters({
-  estadosSincronizacion,
-  supervisores,
+  estadosSincronizacion = [],
+  supervisores = [],
   loading,
   onSearch,
   onClear,
@@ -149,15 +149,16 @@ export default function SincronizacionSupervisionesFilters({
                 <SelectItem value="all" className="text-neutral-800 hover:bg-neutral-100">
                   Todos
                 </SelectItem>
-                {supervisores.map((sup) => (
-                  <SelectItem
-                    key={sup.codigo_supervisor}
-                    value={sup.codigo_supervisor.toString()}
-                    className="text-neutral-800 hover:bg-neutral-100"
-                  >
-                    {sup.nombre_supervisor}
-                  </SelectItem>
-                ))}
+                {Array.isArray(supervisores) &&
+                  supervisores.map((sup) => (
+                    <SelectItem
+                      key={sup.codigo_supervisor}
+                      value={sup.codigo_supervisor.toString()}
+                      className="text-neutral-800 hover:bg-neutral-100"
+                    >
+                      {sup.nombre_supervisor}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
@@ -175,15 +176,16 @@ export default function SincronizacionSupervisionesFilters({
                 <SelectItem value="all" className="text-neutral-800 hover:bg-neutral-100">
                   Todos
                 </SelectItem>
-                {estadosSincronizacion.map((estado) => (
-                  <SelectItem
-                    key={estado.nid_estado}
-                    value={estado.nid_estado}
-                    className="text-neutral-800 hover:bg-neutral-100"
-                  >
-                    {estado.nombre_estado}
-                  </SelectItem>
-                ))}
+                {Array.isArray(estadosSincronizacion) &&
+                  estadosSincronizacion.map((estado) => (
+                    <SelectItem
+                      key={estado.nid_estado}
+                      value={estado.nid_estado}
+                      className="text-neutral-800 hover:bg-neutral-100"
+                    >
+                      {estado.nombre_estado}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

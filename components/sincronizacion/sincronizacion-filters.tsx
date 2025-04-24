@@ -25,7 +25,7 @@ interface SincronizacionFiltersProps {
 }
 
 export default function SincronizacionFilters({
-  estadosSincronizacion,
+  estadosSincronizacion = [], // Proporcionar un array vacío como valor predeterminado
   loading,
   onSearch,
   onClear,
@@ -107,15 +107,17 @@ export default function SincronizacionFilters({
                 <SelectItem value="all" className="text-neutral-800 hover:bg-neutral-100">
                   Todos
                 </SelectItem>
-                {estadosSincronizacion.map((estado) => (
-                  <SelectItem
-                    key={estado.nid_estado}
-                    value={estado.nid_estado}
-                    className="text-neutral-800 hover:bg-neutral-100"
-                  >
-                    {estado.nombre_estado}
-                  </SelectItem>
-                ))}
+                {/* Verificar que estadosSincronizacion sea un array antes de usar map */}
+                {Array.isArray(estadosSincronizacion) &&
+                  estadosSincronizacion.map((estado) => (
+                    <SelectItem
+                      key={estado.nid_estado}
+                      value={estado.nid_estado}
+                      className="text-neutral-800 hover:bg-neutral-100"
+                    >
+                      {estado.nombre_estado}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

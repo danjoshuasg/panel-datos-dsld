@@ -2,30 +2,24 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import SincronizacionSupervisionesFilters, { type FiltersState } from "./sincronizacion-supervisiones-filters"
-import SincronizacionSupervisionesTable from "./sincronizacion-supervisiones-table"
-import { sincronizacionSupervisionesService } from "@/services/sincronizacion-supervisiones-service"
 import { Loader2 } from "lucide-react"
+import SincronizacionSupervisionesFilters, {
+  type FiltersState,
+} from "@/components/sincronizacion-supervisiones/sincronizacion-supervisiones-filters"
+import SincronizacionSupervisionesTable from "@/components/sincronizacion-supervisiones/sincronizacion-supervisiones-table"
+import {
+  sincronizacionSupervisionesService,
+  type SupervisionSincronizacion,
+} from "@/services/sincronizacion-supervisiones-service"
 
 export default function SincronizacionSupervisionesSearch() {
-  // Estados para los resultados y carga
-  const [supervisiones, setSupervisiones] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [searchPerformed, setSearchPerformed] = useState(false)
-
   // Estados para los datos de filtros
   const [supervisores, setSupervisores] = useState([])
   const [estadosSincronizacion, setEstadosSincronizacion] = useState([])
   const [loadingFilters, setLoadingFilters] = useState(false)
 
-  // Estados para la paginación
-  const [currentPage, setCurrentPage] = useState(1)
-  const [recordsPerPage] = useState(25)
-  const [totalRecords, setTotalRecords] = useState(0)
-
-  // Estado para los filtros actuales
-  const [currentFilters, setCurrentFilters] = useState<FiltersState>({
+  // Estados para los filtros
+  const [filters, setFilters] = useState<FiltersState>({
     ubigeo: null,
     codigoDna: "",
     fechaDesde: null,
@@ -33,6 +27,18 @@ export default function SincronizacionSupervisionesSearch() {
     supervisor: null,
     estadoSincronizacion: null,
   })
+
+  // Estados para los resultados y carga
+  const [supervisiones, setSupervisiones] = useState<SupervisionSincronizacion[]>([])
+  const [loading, setLoading] = useState(false)
+  const [searchPerformed, setSearchPerformed] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Estados para la paginación
+  const [currentPage, setCurrentPage] = useState(1)
+  const [recordsPerPage] = useState(25)
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
 
   // Cargar datos iniciales al montar el componente
   useEffect(() => {
@@ -45,40 +51,52 @@ export default function SincronizacionSupervisionesSearch() {
     try {
       // Cargar supervisores
       const supervisoresData = await sincronizacionSupervisionesService.getSupervisores()
-      setSupervisores(supervisoresData)
+      setSupervisores(supervisoresData || [])
 
       // Cargar estados de sincronización
       const estadosData = await sincronizacionSupervisionesService.getEstadosSincronizacion()
-      setEstadosSincronizacion(estadosData)
+      setEstadosSincronizacion(estadosData || [])
     } catch (err) {
       console.error("Error cargando datos iniciales:", err)
       setError("Error al cargar datos iniciales: " + (err instanceof Error ? err.message : "Error desconocido"))
+      // Inicializar con arrays vacíos en caso de error
+      setSupervisores([])
+      setEstadosSincronizacion([])
     } finally {
       setLoadingFilters(false)
     }
   }
 
   // Función para buscar supervisiones
-  async function searchSupervisiones(filters: FiltersState) {
+  async function searchSupervisiones(newFilters?: FiltersState) {
+    const searchFilters = newFilters || filters
+
     setLoading(true)
     setError(null)
     setSearchPerformed(true)
-    setCurrentFilters(filters)
 
     try {
+      // Usar el servicio para buscar supervisiones
       const result = await sincronizacionSupervisionesService.searchSupervisiones({
-        ...filters,
+        ubigeo: searchFilters.ubigeo,
+        codigoDna: searchFilters.codigoDna,
+        fechaDesde: searchFilters.fechaDesde,
+        fechaHasta: searchFilters.fechaHasta,
+        supervisor: searchFilters.supervisor,
+        estadoSincronizacion: searchFilters.estadoSincronizacion,
         page: currentPage,
         pageSize: recordsPerPage,
       })
 
-      setSupervisiones(result.supervisiones)
-      setTotalRecords(result.totalRecords)
+      setSupervisiones(result.supervisiones || [])
+      setTotalRecords(result.totalRecords || 0)
+      setTotalPages(Math.ceil((result.totalRecords || 0) / recordsPerPage))
     } catch (err) {
       console.error("Error buscando supervisiones:", err)
       setError("Error al buscar supervisiones: " + (err instanceof Error ? err.message : "Error desconocido"))
       setSupervisiones([])
       setTotalRecords(0)
+      setTotalPages(0)
     } finally {
       setLoading(false)
     }
@@ -86,7 +104,7 @@ export default function SincronizacionSupervisionesSearch() {
 
   // Función para limpiar los filtros
   function clearFilters() {
-    setCurrentFilters({
+    setFilters({
       ubigeo: null,
       codigoDna: "",
       fechaDesde: null,
@@ -98,22 +116,22 @@ export default function SincronizacionSupervisionesSearch() {
     setSearchPerformed(false)
     setCurrentPage(1)
     setTotalRecords(0)
+    setTotalPages(0)
   }
 
-  // Función para cambiar de página
+  // Función para manejar cambios de página
   function handlePageChange(page: number) {
     setCurrentPage(page)
+    // Volver a buscar con la nueva página
+    searchSupervisiones()
   }
 
-  // Efecto para realizar la búsqueda cuando cambia la página
-  useEffect(() => {
-    if (searchPerformed) {
-      searchSupervisiones(currentFilters)
-    }
-  }, [currentPage])
-
-  // Calcular el número total de páginas
-  const totalPages = Math.ceil(totalRecords / recordsPerPage)
+  // Función para manejar la búsqueda desde los filtros
+  function handleSearch(newFilters: FiltersState) {
+    setFilters(newFilters)
+    setCurrentPage(1) // Resetear a la primera página
+    searchSupervisiones(newFilters)
+  }
 
   return (
     <div className="space-y-6">
@@ -122,7 +140,7 @@ export default function SincronizacionSupervisionesSearch() {
         <CardHeader className="bg-demuna-gradient text-white">
           <CardTitle>Filtros de búsqueda</CardTitle>
         </CardHeader>
-        <CardContent className="p-6 bg-neutral-50">
+        <CardContent className="space-y-6 p-6 bg-neutral-50">
           {error && <div className="bg-red-50 p-3 rounded-md text-red-600 text-sm mb-4">{error}</div>}
 
           {loadingFilters ? (
@@ -135,7 +153,7 @@ export default function SincronizacionSupervisionesSearch() {
               estadosSincronizacion={estadosSincronizacion}
               supervisores={supervisores}
               loading={loading}
-              onSearch={searchSupervisiones}
+              onSearch={handleSearch}
               onClear={clearFilters}
             />
           )}
@@ -143,17 +161,12 @@ export default function SincronizacionSupervisionesSearch() {
       </Card>
 
       {/* Sección de resultados */}
-      <Card className="border-0 shadow-lg overflow-hidden slide-in-right bg-white/90 backdrop-blur-sm">
+      <Card
+        className="border-0 shadow-lg overflow-hidden slide-in-right bg-white/90 backdrop-blur-sm"
+        style={{ animationDelay: "100ms" }}
+      >
         <CardHeader className="bg-demuna-gradient text-white">
-          <CardTitle className="flex items-center justify-between">
-            <span>Resultados</span>
-            {loading && (
-              <div className="flex items-center text-sm font-normal text-white/80">
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                Cargando información...
-              </div>
-            )}
-          </CardTitle>
+          <CardTitle>Resultados</CardTitle>
         </CardHeader>
         <CardContent className="p-0 bg-neutral-50">
           {loading ? (
@@ -162,14 +175,22 @@ export default function SincronizacionSupervisionesSearch() {
               <span className="ml-2 text-neutral-700">Cargando resultados...</span>
             </div>
           ) : searchPerformed ? (
-            <SincronizacionSupervisionesTable
-              supervisiones={supervisiones}
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalRecords={totalRecords}
-              recordsPerPage={recordsPerPage}
-              onPageChange={handlePageChange}
-            />
+            supervisiones.length > 0 ? (
+              <div className="px-0 py-0">
+                <SincronizacionSupervisionesTable
+                  supervisiones={supervisiones}
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalRecords={totalRecords}
+                  recordsPerPage={recordsPerPage}
+                  onPageChange={handlePageChange}
+                />
+              </div>
+            ) : (
+              <div className="text-center py-16 text-neutral-600">
+                No se encontraron supervisiones con los filtros seleccionados.
+              </div>
+            )
           ) : (
             <div className="text-center py-16 text-neutral-600">Utilice los filtros para buscar supervisiones.</div>
           )}

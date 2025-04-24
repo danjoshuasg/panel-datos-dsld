@@ -168,15 +168,16 @@ export default function SupervisionesFilters({ supervisores, loading, onSearch, 
                 <SelectItem value="all" className="text-neutral-800 hover:bg-neutral-100">
                   Todos
                 </SelectItem>
-                {supervisores.map((sup) => (
-                  <SelectItem
-                    key={sup.codigo_supervisor}
-                    value={sup.codigo_supervisor.toString()}
-                    className="text-neutral-800 hover:bg-neutral-100"
-                  >
-                    {sup.nombre_supervisor}
-                  </SelectItem>
-                ))}
+                {supervisores &&
+                  supervisores.map((sup) => (
+                    <SelectItem
+                      key={sup.codigo_supervisor}
+                      value={sup.codigo_supervisor.toString()}
+                      className="text-neutral-800 hover:bg-neutral-100"
+                    >
+                      {sup.nombre_supervisor}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

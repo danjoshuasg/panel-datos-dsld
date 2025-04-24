@@ -140,9 +140,9 @@ export default function AuthDefensoriasPage() {
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">
       <div className="mb-6 fade-in">
-        <h1 className="text-3xl font-bold text-gray-800">Directorio de DEMUNAS</h1>
+        <h1 className="text-3xl font-bold text-gray-800">Directorio de las DEMUNA</h1>
         <p className="text-gray-600 mt-2">
-          Gestione la información de las Defensorías Municipales del Niño y del Adolescente
+          Visualice la información de las Defensorías Municipales de las Niñas, Niños y del Adolescentes
         </p>
       </div>
 

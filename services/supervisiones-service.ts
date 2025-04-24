@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/client"
+import { BaseService, type BaseSearchParams, type BaseSearchResult } from "@/lib/base-service"
 
 // Interfaces
 export interface Supervision {
@@ -21,6 +21,14 @@ export interface Supervision {
   distrito?: string
 }
 
+export interface SupervisionRaw {
+  nid_supervision: number
+  codigo_dna: string
+  fecha: string
+  codigo_supervisor: number
+  nid_modalidad: number
+}
+
 export interface Supervisor {
   codigo_supervisor: number
   nombre_supervisor: string
@@ -31,28 +39,28 @@ export interface Modalidad {
   nombre_modalidad: string
 }
 
-export interface SearchParams {
-  ubigeo: string | null
-  codigoDna: string
-  fechaDesde: string | null
-  fechaHasta: string | null
-  supervisor: string | null
-  page: number
-  pageSize: number
+export interface SupervisionesSearchParams extends BaseSearchParams {
+  ubigeo?: string | null
+  codigoDna?: string
+  fechaDesde?: string | null
+  fechaHasta?: string | null
+  supervisor?: string | null
 }
 
-export interface SearchResult {
+export interface SupervisionesSearchResult extends BaseSearchResult<Supervision> {
   supervisiones: Supervision[]
-  totalRecords: number
 }
 
 // Clase de servicio para supervisiones
-class SupervisionesService {
-  private supabase = createClient()
-  private cache: {
-    supervisores?: Supervisor[]
-    modalidades?: Modalidad[]
-  } = {}
+class SupervisionesService extends BaseService<Supervision, SupervisionesSearchParams, SupervisionesSearchResult> {
+  protected override initializeCache(): void {
+    super.initializeCache()
+    this.cache.supervisores = undefined
+    this.cache.modalidades = undefined
+    this.cache.seguimientos = {}
+    this.cache.fichas = {}
+    this.cache.demunasInfo = {}
+  }
 
   // Obtener supervisores
   async getSupervisores(): Promise<Supervisor[]> {
@@ -62,30 +70,28 @@ class SupervisionesService {
     }
 
     try {
-      // En un entorno de producción, usaríamos esta consulta:
-      // const { data, error } = await this.supabase
-      //   .from("supervisores")
-      //   .select("codigo_supervisor, nombre_supervisor")
-      //   .eq("flg_activo_dsld", true)
-      //   .order("nombre_supervisor", { ascending: true });
-      // if (error) throw new Error(`Error al cargar supervisores: ${error.message}`);
-      // this.cache.supervisores = data || [];
-      // return data || [];
+      const { data, error } = await this.supabase
+        .from("supervisores")
+        .select("codigo_supervisor, nombre_supervisor")
+        .eq("flg_activo_dsld", true)
+        .order("nombre_supervisor", { ascending: true })
 
-      // Para evitar errores con la tabla, usamos datos simulados temporalmente
-      const supervisores: Supervisor[] = [
+      if (error) throw new Error(`Error al cargar supervisores: ${error.message}`)
+
+      this.cache.supervisores = data || []
+      return data || []
+    } catch (error) {
+      console.error("Error en getSupervisores:", error)
+
+      // Datos de respaldo en caso de error
+      const fallbackSupervisores = [
         { codigo_supervisor: 1, nombre_supervisor: "MARCOS DELFÍN" },
         { codigo_supervisor: 2, nombre_supervisor: "MARÍA LÓPEZ" },
         { codigo_supervisor: 3, nombre_supervisor: "JUAN PÉREZ" },
-        { codigo_supervisor: 4, nombre_supervisor: "CARLOS GÓMEZ" },
-        { codigo_supervisor: 5, nombre_supervisor: "ANA RODRÍGUEZ" },
       ]
 
-      this.cache.supervisores = supervisores
-      return supervisores
-    } catch (error) {
-      console.error("Error en getSupervisores:", error)
-      throw error
+      this.cache.supervisores = fallbackSupervisores
+      return fallbackSupervisores
     }
   }
 
@@ -97,31 +103,20 @@ class SupervisionesService {
     }
 
     try {
-      // En un entorno de producción, usaríamos esta consulta:
-      // const { data, error } = await this.supabase
-      //   .from("supervision_modalidades")
-      //   .select("nid_modalidad, nombre_modalidad")
-      //   .order("nombre_modalidad", { ascending: true });
-      // if (error) throw new Error(`Error al cargar modalidades: ${error.message}`);
-      // this.cache.modalidades = data || [];
-      // return data || [];
+      const { data, error } = await this.supabase
+        .from("supervision_modalidades")
+        .select("nid_modalidad, nombre_modalidad")
+        .order("nombre_modalidad", { ascending: true })
 
-      // Para evitar errores con la tabla, usamos datos simulados temporalmente
-      const modalidades: Modalidad[] = [
-        { nid_modalidad: 1, nombre_modalidad: "Ordinaria" },
-        { nid_modalidad: 2, nombre_modalidad: "Extraordinaria" },
-        { nid_modalidad: 3, nombre_modalidad: "Seguimiento" },
-        { nid_modalidad: 4, nombre_modalidad: "Virtual" },
-        { nid_modalidad: 5, nombre_modalidad: "Presencial" },
-      ]
+      if (error) throw new Error(`Error al cargar modalidades: ${error.message}`)
 
-      this.cache.modalidades = modalidades
-      return modalidades
+      this.cache.modalidades = data || []
+      return data || []
     } catch (error) {
       console.error("Error en getModalidades:", error)
 
-      // En caso de error, devolver datos básicos para que la aplicación siga funcionando
-      const fallbackModalidades: Modalidad[] = [
+      // Datos de respaldo en caso de error
+      const fallbackModalidades = [
         { nid_modalidad: 1, nombre_modalidad: "Ordinaria" },
         { nid_modalidad: 2, nombre_modalidad: "Extraordinaria" },
         { nid_modalidad: 3, nombre_modalidad: "Seguimiento" },
@@ -133,29 +128,17 @@ class SupervisionesService {
   }
 
   // Aplicar filtros a una consulta
-  private applyFilters(query: any, params: SearchParams) {
+  protected override applyFilters(query: any, params: SupervisionesSearchParams): any {
     let filteredQuery = query
-
-    // Aplicar filtro de ubigeo
-    if (params.ubigeo) {
-      // Obtener las defensorías que coinciden con el ubigeo seleccionado
-      const ubigeoLength = params.ubigeo.replace(/0+$/, "").length
-
-      if (ubigeoLength <= 2) {
-        // Filtrar por departamento
-        filteredQuery = filteredQuery.like("nid_ubigeo", params.ubigeo.substring(0, 2) + "%")
-      } else if (ubigeoLength <= 4) {
-        // Filtrar por provincia
-        filteredQuery = filteredQuery.like("nid_ubigeo", params.ubigeo.substring(0, 4) + "%")
-      } else {
-        // Filtrar por distrito
-        filteredQuery = filteredQuery.eq("nid_ubigeo", params.ubigeo)
-      }
-    }
 
     // Aplicar filtro de código DNA
     if (params.codigoDna) {
       filteredQuery = filteredQuery.ilike("codigo_dna", `%${params.codigoDna}%`)
+    }
+
+    // Aplicar filtro de supervisor
+    if (params.supervisor && params.supervisor !== "all") {
+      filteredQuery = filteredQuery.eq("codigo_supervisor", params.supervisor)
     }
 
     // Aplicar filtro de fecha desde
@@ -168,42 +151,16 @@ class SupervisionesService {
       filteredQuery = filteredQuery.lte("fecha", params.fechaHasta)
     }
 
-    // Aplicar filtro de supervisor
-    if (params.supervisor && params.supervisor !== "all") {
-      filteredQuery = filteredQuery.eq("codigo_supervisor", params.supervisor)
-    }
-
     return filteredQuery
   }
 
-  // Obtener conteo total de registros
-  async getTotalRecords(params: SearchParams): Promise<number> {
-    try {
-      // En un entorno de producción, usaríamos esta consulta:
-      // let countQuery = this.supabase.from("supervisiones").select("*", { count: "exact", head: true })
-      // countQuery = this.applyFilters(countQuery, params)
-      // const { count, error } = await countQuery
-      // if (error) throw new Error(`Error al obtener conteo de registros: ${error.message}`)
-      // return count || 0
-
-      // Para evitar errores con la tabla, usamos datos simulados temporalmente
-      // Simulamos una búsqueda para obtener el conteo
-      const result = await this.searchSupervisiones(params)
-      return result.totalRecords
-    } catch (error) {
-      console.error("Error en getTotalRecords:", error)
-      // En caso de error, devolvemos un valor por defecto
-      return 0
-    }
-  }
-
   // Buscar supervisiones con paginación
-  async searchSupervisiones(params: SearchParams): Promise<SearchResult> {
+  async search(params: SupervisionesSearchParams): Promise<SupervisionesSearchResult> {
     try {
-      // Validar parámetros de entrada
+      // Validar parámetros
       if (params.page < 1) params.page = 1
       if (params.pageSize < 1) params.pageSize = 25
-      if (params.pageSize > 100) params.pageSize = 100 // Limitar tamaño máximo de página
+      if (params.pageSize > 100) params.pageSize = 100
 
       // Validar fechas
       if (params.fechaDesde && params.fechaHasta) {
@@ -212,231 +169,278 @@ class SupervisionesService {
         }
       }
 
-      // Simulamos un tiempo de carga (reducido para mejor experiencia)
-      await new Promise((resolve) => setTimeout(resolve, 300))
-
-      // Para fines de demostración, devolvemos datos simulados
-      const supervisiones: Supervision[] = [
-        {
-          nid_supervision: 1,
-          codigo_dna: "DNA-001",
-          fecha: "2023-05-15",
-          supervisor: "MARCOS DELFÍN",
-          modalidad: "Ordinaria",
-          ficha: "https://example.com/ficha1.pdf",
-          doc_seguimiento: "INF-001-2023",
-          subsanacion: true,
-          doc_reiterativo: null,
-          doc_oci: null,
-          fecha_cierre: "2023-06-20",
-          doc_cierre: "PROV-001-2023",
-          tipo_cierre: "Subsanado",
-          nombre_demuna: "DEMUNA Lima Centro",
-          departamento: "Lima",
-          provincia: "Lima",
-          distrito: "Lima",
-        },
-        {
-          nid_supervision: 2,
-          codigo_dna: "DNA-002",
-          fecha: "2023-06-20",
-          supervisor: "MARCOS DELFÍN",
-          modalidad: "Extraordinaria",
-          ficha: "https://example.com/ficha2.pdf",
-          doc_seguimiento: "INF-002-2023",
-          subsanacion: false,
-          doc_reiterativo: "OFI-001-2023",
-          doc_oci: "OCI-001-2023",
-          fecha_cierre: null,
-          doc_cierre: null,
-          tipo_cierre: null,
-          nombre_demuna: "DEMUNA Miraflores",
-          departamento: "Lima",
-          provincia: "Lima",
-          distrito: "Miraflores",
-        },
-        {
-          nid_supervision: 3,
-          codigo_dna: "DNA-003",
-          fecha: "2023-07-10",
-          supervisor: "MARÍA LÓPEZ",
-          modalidad: "Seguimiento",
-          ficha: null,
-          doc_seguimiento: null,
-          subsanacion: null,
-          doc_reiterativo: null,
-          doc_oci: null,
-          fecha_cierre: null,
-          doc_cierre: null,
-          tipo_cierre: null,
-          nombre_demuna: "DEMUNA San Isidro",
-          departamento: "Lima",
-          provincia: "Lima",
-          distrito: "San Isidro",
-        },
-        {
-          nid_supervision: 4,
-          codigo_dna: "DNA-004",
-          fecha: "2023-08-05",
-          supervisor: "JUAN PÉREZ",
-          modalidad: "Ordinaria",
-          ficha: "https://example.com/ficha4.pdf",
-          doc_seguimiento: "INF-004-2023",
-          subsanacion: true,
-          doc_reiterativo: null,
-          doc_oci: null,
-          fecha_cierre: "2023-09-15",
-          doc_cierre: "PROV-002-2023",
-          tipo_cierre: "Subsanado",
-          nombre_demuna: "DEMUNA Surco",
-          departamento: "Lima",
-          provincia: "Lima",
-          distrito: "Santiago de Surco",
-        },
-        {
-          nid_supervision: 5,
-          codigo_dna: "DNA-005",
-          fecha: "2023-09-12",
-          supervisor: "CARLOS GÓMEZ",
-          modalidad: "Extraordinaria",
-          ficha: "https://example.com/ficha5.pdf",
-          doc_seguimiento: null,
-          subsanacion: null,
-          doc_reiterativo: null,
-          doc_oci: null,
-          fecha_cierre: null,
-          doc_cierre: null,
-          tipo_cierre: null,
-          nombre_demuna: "DEMUNA San Borja",
-          departamento: "Lima",
-          provincia: "Lima",
-          distrito: "San Borja",
-        },
-        // Agregar más datos de ejemplo para probar la paginación
-        {
-          nid_supervision: 6,
-          codigo_dna: "DNA-006",
-          fecha: "2023-10-05",
-          supervisor: "ANA RODRÍGUEZ",
-          modalidad: "Ordinaria",
-          ficha: "https://example.com/ficha6.pdf",
-          doc_seguimiento: "INF-006-2023",
-          subsanacion: true,
-          doc_reiterativo: null,
-          doc_oci: null,
-          fecha_cierre: "2023-11-10",
-          doc_cierre: "PROV-003-2023",
-          tipo_cierre: "Subsanado",
-          nombre_demuna: "DEMUNA Barranco",
-          departamento: "Lima",
-          provincia: "Lima",
-          distrito: "Barranco",
-        },
-        {
-          nid_supervision: 7,
-          codigo_dna: "DNA-007",
-          fecha: "2023-11-15",
-          supervisor: "JUAN PÉREZ",
-          modalidad: "Seguimiento",
-          ficha: "https://example.com/ficha7.pdf",
-          doc_seguimiento: null,
-          subsanacion: null,
-          doc_reiterativo: null,
-          doc_oci: null,
-          fecha_cierre: null,
-          doc_cierre: null,
-          tipo_cierre: null,
-          nombre_demuna: "DEMUNA Chorrillos",
-          departamento: "Lima",
-          provincia: "Lima",
-          distrito: "Chorrillos",
-        },
-      ]
-
-      // Aplicar filtros de manera más robusta
-      let filteredSupervisiones = [...supervisiones]
-
-      // Filtrar por código DNA
-      if (params.codigoDna) {
-        const codigoSearch = params.codigoDna.toLowerCase().trim()
-        filteredSupervisiones = filteredSupervisiones.filter((sup) =>
-          sup.codigo_dna.toLowerCase().includes(codigoSearch),
-        )
-      }
-
-      // Filtrar por fecha desde
-      if (params.fechaDesde) {
-        try {
-          const fromDate = new Date(params.fechaDesde)
-          filteredSupervisiones = filteredSupervisiones.filter((sup) => new Date(sup.fecha) >= fromDate)
-        } catch (err) {
-          console.error("Error al filtrar por fecha desde:", err)
-          // Continuar sin aplicar este filtro
-        }
-      }
-
-      // Filtrar por fecha hasta
-      if (params.fechaHasta) {
-        try {
-          const toDate = new Date(params.fechaHasta)
-          // Ajustar la fecha hasta el final del día
-          toDate.setHours(23, 59, 59, 999)
-          filteredSupervisiones = filteredSupervisiones.filter((sup) => new Date(sup.fecha) <= toDate)
-        } catch (err) {
-          console.error("Error al filtrar por fecha hasta:", err)
-          // Continuar sin aplicar este filtro
-        }
-      }
-
-      // Filtrar por supervisor
-      if (params.supervisor && params.supervisor !== "all") {
-        filteredSupervisiones = filteredSupervisiones.filter((sup) => sup.supervisor.includes(params.supervisor || ""))
-      }
-
-      // Filtrar por ubigeo (simulado)
+      // Si hay filtro de ubigeo, primero obtenemos las defensorías que coinciden
+      let codigosDnaFiltrados: string[] | null = null
       if (params.ubigeo) {
-        // En un entorno real, esto se haría con una consulta a la base de datos
-        // Aquí simulamos el filtrado por departamento, provincia o distrito
         const ubigeoLength = params.ubigeo.replace(/0+$/, "").length
 
+        let ubigeoQuery = this.supabase.from("defensorias").select("codigo_dna")
+
         if (ubigeoLength <= 2) {
-          // Filtrar por departamento (primeros 2 dígitos)
-          const depCode = params.ubigeo.substring(0, 2)
-          filteredSupervisiones = filteredSupervisiones.filter(
-            (sup) => sup.departamento && sup.departamento.toLowerCase() === "lima",
-          )
+          ubigeoQuery = ubigeoQuery.like("nid_ubigeo", params.ubigeo.substring(0, 2) + "%")
         } else if (ubigeoLength <= 4) {
-          // Filtrar por provincia (primeros 4 dígitos)
-          const provCode = params.ubigeo.substring(0, 4)
-          filteredSupervisiones = filteredSupervisiones.filter(
-            (sup) => sup.provincia && sup.provincia.toLowerCase() === "lima",
-          )
+          ubigeoQuery = ubigeoQuery.like("nid_ubigeo", params.ubigeo.substring(0, 4) + "%")
         } else {
-          // Filtrar por distrito (código completo)
-          filteredSupervisiones = filteredSupervisiones.filter(
-            (sup) => sup.distrito && sup.distrito.toLowerCase() === "lima",
-          )
+          ubigeoQuery = ubigeoQuery.eq("nid_ubigeo", params.ubigeo)
+        }
+
+        const { data: defensorias, error } = await ubigeoQuery
+
+        if (error) throw new Error(`Error al filtrar por ubicación: ${error.message}`)
+
+        if (!defensorias || defensorias.length === 0) {
+          // Si no hay defensorías que coincidan, devolver resultado vacío
+          return {
+            supervisiones: [],
+            items: [],
+            totalRecords: 0,
+          }
+        }
+
+        codigosDnaFiltrados = defensorias.map((d) => d.codigo_dna)
+      }
+
+      // Construir la consulta base
+      let query = this.supabase.from("supervisiones").select(`
+        nid_supervision,
+        codigo_dna,
+        fecha,
+        codigo_supervisor,
+        nid_modalidad
+      `)
+
+      // Aplicar filtros comunes
+      query = this.applyFilters(query, params)
+
+      // Aplicar filtro de códigos DNA si se filtró por ubigeo
+      if (codigosDnaFiltrados) {
+        query = query.in("codigo_dna", codigosDnaFiltrados)
+      }
+
+      // Obtener conteo total - AQUÍ ESTÁ EL PROBLEMA
+      let totalRecords = 0
+      try {
+        // Crear una nueva consulta para el conteo para evitar problemas con la consulta original
+        let countQuery = this.supabase.from("supervisiones").select("nid_supervision", { count: "exact", head: true })
+
+        // Aplicar los mismos filtros a la consulta de conteo
+        countQuery = this.applyFilters(countQuery, params)
+
+        // Aplicar filtro de códigos DNA si se filtró por ubigeo
+        if (codigosDnaFiltrados) {
+          countQuery = countQuery.in("codigo_dna", codigosDnaFiltrados)
+        }
+
+        const { count, error: countError } = await countQuery
+
+        if (countError) {
+          console.error("Error al obtener conteo:", countError)
+          // En lugar de lanzar un error, manejamos el caso con un valor predeterminado
+          totalRecords = 0
+        } else {
+          totalRecords = count || 0
+        }
+      } catch (error) {
+        console.error("Error al obtener conteo de registros:", error)
+        // Manejamos el error de manera más robusta
+        totalRecords = 0
+      }
+
+      // Si no hay resultados, terminar aquí
+      if (totalRecords === 0) {
+        return {
+          supervisiones: [],
+          items: [],
+          totalRecords: 0,
         }
       }
 
-      // Calcular paginación de manera segura
-      const totalRecords = filteredSupervisiones.length
-      const start = Math.max(0, (params.page - 1) * params.pageSize)
-      const end = Math.min(start + params.pageSize, totalRecords)
-      const paginatedSupervisiones = filteredSupervisiones.slice(start, end)
+      // Aplicar paginación
+      const { from, to } = this.getPaginationRange(params.page, params.pageSize)
+      query = query.range(from, to).order("fecha", { ascending: false })
+
+      // Ejecutar la consulta
+      const { data: supervisionesData, error: supervisionesError } = await query
+
+      if (supervisionesError) throw new Error(`Error al buscar supervisiones: ${supervisionesError.message}`)
+
+      if (!supervisionesData || supervisionesData.length === 0) {
+        return {
+          supervisiones: [],
+          items: [],
+          totalRecords,
+        }
+      }
+
+      // Obtener información adicional para cada supervisión
+      const supervisionesIds = supervisionesData.map((s) => s.nid_supervision)
+      const supervisionesCodigosDna = supervisionesData.map((s) => s.codigo_dna)
+      const supervisionesModalidades = [...new Set(supervisionesData.map((s) => s.nid_modalidad).filter(Boolean))]
+      const supervisionesSupervisores = [...new Set(supervisionesData.map((s) => s.codigo_supervisor).filter(Boolean))]
+
+      // Consultas en paralelo para mejorar rendimiento
+      const [modalidadesData, supervisoresData, fichasData, seguimientosData, demunasData] = await Promise.all([
+        // Obtener nombres de modalidades
+        this.supabase
+          .from("supervision_modalidades")
+          .select("nid_modalidad, nombre_modalidad")
+          .in("nid_modalidad", supervisionesModalidades),
+
+        // Obtener nombres de supervisores
+        this.supabase
+          .from("supervisores")
+          .select("codigo_supervisor, nombre_supervisor")
+          .in("codigo_supervisor", supervisionesSupervisores),
+
+        // Obtener fichas de supervisión
+        this.supabase
+          .from("supervision_ficha_datos")
+          .select("nid_supervision, url_file")
+          .in("nid_supervision", supervisionesIds),
+
+        // Obtener seguimientos
+        this.supabase
+          .from("supervision_seguimientos")
+          .select(`
+            nid_supervision,
+            txt_informe_seguimiento,
+            flg_subsanacion,
+            txt_oficio_reiterativo,
+            txt_oficio_oci,
+            fecha_cierre,
+            txt_proveido_cierre,
+            nid_modalidad_cierre
+          `)
+          .in("nid_supervision", supervisionesIds),
+
+        // Obtener nombres de DEMUNAS
+        this.supabase
+          .from("defensorias")
+          .select("codigo_dna, txt_nombre, nid_ubigeo")
+          .in("codigo_dna", supervisionesCodigosDna),
+      ])
+
+      // Obtener tipos de cierre
+      const modalidadesCierre = [
+        ...new Set(seguimientosData.data?.map((s) => s.nid_modalidad_cierre).filter(Boolean) || []),
+      ]
+
+      const { data: tiposCierreData } = await this.supabase
+        .from("seguimiento_cierre_tipos")
+        .select("cod_tipo_cierre, txt_nombre")
+        .in("cod_tipo_cierre", modalidadesCierre)
+
+      // Crear mapas para búsqueda rápida
+      const modalidadesMap = new Map()
+      modalidadesData.data?.forEach((m) => {
+        modalidadesMap.set(m.nid_modalidad, m.nombre_modalidad)
+      })
+
+      const supervisoresMap = new Map()
+      supervisoresData.data?.forEach((s) => {
+        supervisoresMap.set(s.codigo_supervisor, s.nombre_supervisor)
+      })
+
+      const fichasMap = new Map()
+      fichasData.data?.forEach((f) => {
+        fichasMap.set(f.nid_supervision, f.url_file)
+      })
+
+      const tiposCierreMap = new Map()
+      tiposCierreData?.forEach((t) => {
+        tiposCierreMap.set(t.cod_tipo_cierre, t.txt_nombre)
+      })
+
+      const seguimientosMap = new Map()
+      seguimientosData.data?.forEach((s) => {
+        seguimientosMap.set(s.nid_supervision, {
+          ...s,
+          tipo_cierre: tiposCierreMap.get(s.nid_modalidad_cierre) || null,
+        })
+      })
+
+      const demunasMap = new Map()
+      demunasData.data?.forEach((d) => {
+        demunasMap.set(d.codigo_dna, { nombre: d.txt_nombre, ubigeo: d.nid_ubigeo })
+      })
+
+      // Obtener información de ubigeos para las DEMUNAS
+      const ubigeos = [...new Set(demunasData.data?.map((d) => d.nid_ubigeo).filter(Boolean) || [])]
+
+      // Obtener departamentos, provincias y distritos
+      const depCodes = new Set()
+      const provCodes = new Set()
+
+      ubigeos.forEach((u) => {
+        if (u) {
+          depCodes.add(u.substring(0, 2) + "0000")
+          provCodes.add(u.substring(0, 4) + "00")
+        }
+      })
+
+      const [departamentosData, provinciasData, distritosData] = await Promise.all([
+        this.getUbigeos(Array.from(depCodes)),
+        this.getUbigeos(Array.from(provCodes)),
+        this.getUbigeos(ubigeos),
+      ])
+
+      // Crear mapas para departamentos, provincias y distritos
+      const departamentosMap = new Map()
+      departamentosData.forEach((d) => {
+        departamentosMap.set(d.codigo_ubigeo.substring(0, 2), d.txt_nombre)
+      })
+
+      const provinciasMap = new Map()
+      provinciasData.forEach((p) => {
+        provinciasMap.set(p.codigo_ubigeo.substring(0, 4), p.txt_nombre)
+      })
+
+      const distritosMap = new Map()
+      distritosData.forEach((d) => {
+        distritosMap.set(d.codigo_ubigeo, d.txt_nombre)
+      })
+
+      // Combinar los datos
+      const formattedData: Supervision[] = supervisionesData.map((s) => {
+        const demunaInfo = demunasMap.get(s.codigo_dna)
+        const ubigeo = demunaInfo?.ubigeo || ""
+        const seguimientoInfo = seguimientosMap.get(s.nid_supervision)
+
+        return {
+          nid_supervision: s.nid_supervision,
+          codigo_dna: s.codigo_dna,
+          fecha: s.fecha,
+          supervisor: supervisoresMap.get(s.codigo_supervisor) || "No asignado",
+          modalidad: modalidadesMap.get(s.nid_modalidad) || "No especificada",
+          ficha: fichasMap.get(s.nid_supervision) || null,
+          doc_seguimiento: seguimientoInfo?.txt_informe_seguimiento || null,
+          subsanacion: seguimientoInfo?.flg_subsanacion || null,
+          doc_reiterativo: seguimientoInfo?.txt_oficio_reiterativo || null,
+          doc_oci: seguimientoInfo?.txt_oficio_oci || null,
+          fecha_cierre: seguimientoInfo?.fecha_cierre || null,
+          doc_cierre: seguimientoInfo?.txt_proveido_cierre || null,
+          tipo_cierre: seguimientoInfo?.tipo_cierre || null,
+          nombre_demuna: demunaInfo?.nombre || "Desconocida",
+          departamento: ubigeo ? departamentosMap.get(ubigeo.substring(0, 2)) || "Desconocido" : "Desconocido",
+          provincia: ubigeo ? provinciasMap.get(ubigeo.substring(0, 4)) || "Desconocido" : "Desconocido",
+          distrito: ubigeo ? distritosMap.get(ubigeo) || "Desconocido" : "Desconocido",
+        }
+      })
 
       return {
-        supervisiones: paginatedSupervisiones,
+        supervisiones: formattedData,
+        items: formattedData,
         totalRecords,
       }
     } catch (error) {
       console.error("Error en searchSupervisiones:", error)
-      // En caso de error, devolver un resultado vacío pero válido
-      return {
-        supervisiones: [],
-        totalRecords: 0,
-      }
+      throw error
     }
+  }
+
+  // Método para mantener compatibilidad con el código existente
+  async searchSupervisiones(params: SupervisionesSearchParams): Promise<SupervisionesSearchResult> {
+    return this.search(params)
   }
 }
 

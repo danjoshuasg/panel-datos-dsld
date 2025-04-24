@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/client"
+import { BaseService, type BaseSearchParams, type BaseSearchResult } from "@/lib/base-service"
 
 // Interfaces
 export interface Defensoria {
@@ -49,29 +49,22 @@ export interface ResponsableInfo {
   txt_telefono: string
 }
 
-export interface SearchParams {
-  ubigeo: string | null
-  codigoDna: string
-  estadoAcreditacion: string | null
-  page: number
-  pageSize: number
+export interface DefensoriasSearchParams extends BaseSearchParams {
+  ubigeo?: string | null
+  codigoDna?: string
+  estadoAcreditacion?: string | null
 }
 
-export interface SearchResult {
+export interface DefensoriasSearchResult extends BaseSearchResult<Defensoria> {
   defensorias: Defensoria[]
-  totalRecords: number
 }
 
 // Clase de servicio para defensorías
-class DefensoriasService {
-  private supabase = createClient()
-  private cache: {
-    estadosAcreditacion?: EstadoAcreditacion[]
-    responsables: Record<string, ResponsableInfo | null>
-    ubigeoNames: Record<string, string>
-  } = {
-    responsables: {},
-    ubigeoNames: {},
+class DefensoriasService extends BaseService<Defensoria, DefensoriasSearchParams, DefensoriasSearchResult> {
+  protected override initializeCache(): void {
+    super.initializeCache()
+    this.cache.estadosAcreditacion = undefined
+    this.cache.responsables = {}
   }
 
   // Obtener estados de acreditación
@@ -93,28 +86,14 @@ class DefensoriasService {
   }
 
   // Aplicar filtros a una consulta
-  private applyFilters(query: any, params: SearchParams) {
+  protected override applyFilters(query: any, params: DefensoriasSearchParams): any {
     let filteredQuery = query
 
-    // Aplicar filtro de ubigeo
-    if (params.ubigeo) {
-      const ubigeoLength = params.ubigeo.replace(/0+$/, "").length
+    // Aplicar filtros comunes usando los métodos de la clase base
+    filteredQuery = this.applyUbigeoFilter(filteredQuery, params.ubigeo)
+    filteredQuery = this.applyCodigoDnaFilter(filteredQuery, params.codigoDna)
 
-      if (ubigeoLength <= 2) {
-        filteredQuery = filteredQuery.like("nid_ubigeo", params.ubigeo.substring(0, 2) + "%")
-      } else if (ubigeoLength <= 4) {
-        filteredQuery = filteredQuery.like("nid_ubigeo", params.ubigeo.substring(0, 4) + "%")
-      } else {
-        filteredQuery = filteredQuery.eq("nid_ubigeo", params.ubigeo)
-      }
-    }
-
-    // Aplicar filtro de código DNA
-    if (params.codigoDna) {
-      filteredQuery = filteredQuery.ilike("codigo_dna", `%${params.codigoDna}%`)
-    }
-
-    // Aplicar filtro de estado de acreditación
+    // Aplicar filtro de estado de acreditación (específico de este servicio)
     if (params.estadoAcreditacion && params.estadoAcreditacion !== "all") {
       filteredQuery = filteredQuery.eq("nid_estado", params.estadoAcreditacion)
     }
@@ -122,27 +101,14 @@ class DefensoriasService {
     return filteredQuery
   }
 
-  // Obtener conteo total de registros
-  async getTotalRecords(params: SearchParams): Promise<number> {
-    let countQuery = this.supabase.from("defensorias").select("*", { count: "exact", head: true })
-    countQuery = this.applyFilters(countQuery, params)
-
-    const { count, error } = await countQuery
-
-    if (error) throw new Error(`Error al obtener conteo de registros: ${error.message}`)
-
-    return count || 0
-  }
-
   // Buscar defensorías con paginación
-  async searchDefensorias(params: SearchParams): Promise<SearchResult> {
+  async search(params: DefensoriasSearchParams): Promise<DefensoriasSearchResult> {
     try {
-      // Obtener conteo total
-      const totalRecords = await this.getTotalRecords(params)
+      // Obtener conteo total usando el método de la clase base
+      const totalRecords = await this.getTotalRecords("defensorias", params)
 
       // Calcular rangos para paginación
-      const from = (params.page - 1) * params.pageSize
-      const to = from + params.pageSize - 1
+      const { from, to } = this.getPaginationRange(params.page, params.pageSize)
 
       // Consulta principal con paginación
       let query = this.supabase
@@ -159,7 +125,7 @@ class DefensoriasService {
         `)
         .range(from, to)
 
-      // Aplicar filtros
+      // Aplicar filtros usando el método sobrescrito
       query = this.applyFilters(query, params)
 
       const { data: defensoriasData, error: defensoriasError } = await query
@@ -167,7 +133,7 @@ class DefensoriasService {
       if (defensoriasError) throw new Error(`Error al buscar defensorías: ${defensoriasError.message}`)
 
       if (!defensoriasData || defensoriasData.length === 0) {
-        return { defensorias: [], totalRecords }
+        return { defensorias: [], items: [], totalRecords }
       }
 
       // Extraer conjuntos únicos de tipos, estados y ubigeos
@@ -187,6 +153,7 @@ class DefensoriasService {
       const ubigeosArray = Array.from(ubigeoSet)
 
       // Consultas en paralelo para mejorar rendimiento
+      // Usando métodos de la clase base
       const [tiposData, estadosData, ubigeosData] = await Promise.all([
         this.getCaracteristicas(tiposArray),
         this.getCaracteristicas(estadosArray),
@@ -208,7 +175,7 @@ class DefensoriasService {
       ubigeosData.forEach((ubigeo: Ubigeo) => {
         ubigeosMap.set(ubigeo.codigo_ubigeo, ubigeo.txt_nombre)
         // Guardar en caché para futuras consultas
-        this.cache.ubigeoNames[ubigeo.codigo_ubigeo] = ubigeo.txt_nombre
+        this.ubigeoCache[ubigeo.codigo_ubigeo] = ubigeo.txt_nombre
       })
 
       // Combinar los datos
@@ -225,113 +192,18 @@ class DefensoriasService {
       }))
 
       // Enriquecer con información de departamento y provincia
+      // Usando el método de la clase base
       const formattedDataWithRegions = await this.enrichWithRegionInfo(formattedData)
 
       return {
         defensorias: formattedDataWithRegions,
+        items: formattedDataWithRegions, // Para cumplir con la interfaz BaseSearchResult
         totalRecords,
       }
     } catch (error) {
       console.error("Error en searchDefensorias:", error)
       throw error
     }
-  }
-
-  // Obtener características
-  private async getCaracteristicas(claves: string[]): Promise<Caracteristica[]> {
-    if (claves.length === 0) return []
-
-    const { data, error } = await this.supabase
-      .from("defensorias_caracteristicas")
-      .select("clave_caracteristica, valor_caracteristica")
-      .in("clave_caracteristica", claves)
-
-    if (error) throw new Error(`Error al obtener características: ${error.message}`)
-
-    return data || []
-  }
-
-  // Obtener ubigeos
-  private async getUbigeos(codigos: string[]): Promise<Ubigeo[]> {
-    if (codigos.length === 0) return []
-
-    // Filtrar códigos que ya están en caché
-    const codigosAConsultar = codigos.filter((codigo) => !this.cache.ubigeoNames[codigo])
-
-    if (codigosAConsultar.length === 0) {
-      // Todos los códigos están en caché, construir resultado desde caché
-      return codigos.map((codigo) => ({
-        codigo_ubigeo: codigo,
-        txt_nombre: this.cache.ubigeoNames[codigo] || "",
-      }))
-    }
-
-    const { data, error } = await this.supabase
-      .from("ubigeos")
-      .select("codigo_ubigeo, txt_nombre")
-      .in("codigo_ubigeo", codigosAConsultar)
-
-    if (error)
-      throw new Error(`Error al obtener ubigeos: ${error.message}`)
-
-      // Actualizar caché con nuevos datos
-    ;(data || []).forEach((ubigeo) => {
-      this.cache.ubigeoNames[ubigeo.codigo_ubigeo] = ubigeo.txt_nombre
-    })
-
-    // Combinar resultados de caché y consulta
-    const cachedUbigeos = codigos
-      .filter((codigo) => !codigosAConsultar.includes(codigo))
-      .map((codigo) => ({
-        codigo_ubigeo: codigo,
-        txt_nombre: this.cache.ubigeoNames[codigo] || "",
-      }))
-
-    return [...(data || []), ...cachedUbigeos]
-  }
-
-  // Enriquecer defensorías con información de región
-  private async enrichWithRegionInfo(defensorias: Defensoria[]): Promise<Defensoria[]> {
-    // Extraer códigos únicos de departamento y provincia
-    const depCodes = new Set<string>()
-    const provCodes = new Set<string>()
-
-    defensorias.forEach((def) => {
-      const depCode = def.nid_ubigeo.substring(0, 2) + "0000"
-      const provCode = def.nid_ubigeo.substring(0, 4) + "00"
-      depCodes.add(depCode)
-      provCodes.add(provCode)
-    })
-
-    // Consultar en paralelo
-    const [departamentos, provincias] = await Promise.all([
-      this.getUbigeos(Array.from(depCodes)),
-      this.getUbigeos(Array.from(provCodes)),
-    ])
-
-    // Crear mapas para búsqueda rápida
-    const depMap = new Map<string, string>()
-    departamentos.forEach((dep) => {
-      depMap.set(dep.codigo_ubigeo, dep.txt_nombre)
-    })
-
-    const provMap = new Map<string, string>()
-    provincias.forEach((prov) => {
-      provMap.set(prov.codigo_ubigeo, prov.txt_nombre)
-    })
-
-    // Enriquecer datos
-    return defensorias.map((def) => {
-      const depCode = def.nid_ubigeo.substring(0, 2) + "0000"
-      const provCode = def.nid_ubigeo.substring(0, 4) + "00"
-
-      return {
-        ...def,
-        departamento: depMap.get(depCode) || "Desconocido",
-        provincia: provMap.get(provCode) || "Desconocido",
-        distrito: def.nombre_ubigeo,
-      }
-    })
   }
 
   // Cargar responsables para múltiples defensorías
@@ -433,6 +305,11 @@ class DefensoriasService {
       console.error("Error en loadResponsables:", error)
       throw error
     }
+  }
+
+  // Método para mantener compatibilidad con el código existente
+  async searchDefensorias(params: DefensoriasSearchParams): Promise<DefensoriasSearchResult> {
+    return this.search(params)
   }
 }
 
