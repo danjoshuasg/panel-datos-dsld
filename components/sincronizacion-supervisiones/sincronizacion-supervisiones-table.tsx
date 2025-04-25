@@ -23,13 +23,15 @@ export default function SincronizacionSupervisionesTable({
   recordsPerPage,
   onPageChange,
 }: SincronizacionSupervisionesTableProps) {
-  // Función para formatear la fecha
+  // Modificar la función formatDate para manejar correctamente la zona horaria
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
+    // Crear la fecha asegurando que se interprete como UTC y luego se convierta a local
+    const date = new Date(dateString + "T00:00:00Z")
     return date.toLocaleDateString("es-ES", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
+      timeZone: "UTC", // Forzar interpretación UTC
     })
   }
 

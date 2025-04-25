@@ -1,3 +1,4 @@
+// services/dna-reportes-service.ts
 import { createClient } from "@/utils/supabase/client"
 
 // Interfaces para estadísticas

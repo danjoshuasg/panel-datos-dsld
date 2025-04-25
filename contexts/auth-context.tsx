@@ -7,6 +7,10 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/utils/supabase/client"
 import Cookies from "js-cookie"
 
+// Añadir estas constantes al inicio del archivo, justo después de las importaciones
+const INACTIVITY_TIMEOUT = 60 * 60 * 1000 // 1 hora en milisegundos
+const ACTIVITY_CHECK_INTERVAL = 60 * 1000 // Verificar cada minuto
+
 type User = {
   email: string
   name?: string
@@ -21,11 +25,76 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Modificar el AuthProvider para incluir el manejo de inactividad
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [lastActivity, setLastActivity] = useState<number>(Date.now())
+  const [inactivityTimer, setInactivityTimer] = useState<NodeJS.Timeout | null>(null)
   const router = useRouter()
   const supabase = createClient()
+
+  // Función para actualizar la última actividad
+  const updateActivity = () => {
+    setLastActivity(Date.now())
+  }
+
+  // Configurar los event listeners para detectar actividad del usuario
+  useEffect(() => {
+    if (user) {
+      // Actualizar actividad en interacciones del usuario
+      const activityEvents = ["mousedown", "keydown", "touchstart", "scroll"]
+
+      const handleActivity = () => {
+        updateActivity()
+      }
+
+      activityEvents.forEach((event) => {
+        window.addEventListener(event, handleActivity)
+      })
+
+      // Limpiar event listeners
+      return () => {
+        activityEvents.forEach((event) => {
+          window.removeEventListener(event, handleActivity)
+        })
+      }
+    }
+  }, [user])
+
+  // Configurar el temporizador de inactividad
+  useEffect(() => {
+    if (user) {
+      // Limpiar temporizador existente si hay uno
+      if (inactivityTimer) {
+        clearInterval(inactivityTimer)
+      }
+
+      // Crear nuevo temporizador
+      const timer = setInterval(() => {
+        const currentTime = Date.now()
+        const inactiveTime = currentTime - lastActivity
+
+        if (inactiveTime >= INACTIVITY_TIMEOUT) {
+          console.log("Sesión cerrada por inactividad")
+          logout(() => {
+            // Callback opcional al iniciar logout por inactividad
+          })
+        }
+      }, ACTIVITY_CHECK_INTERVAL)
+
+      setInactivityTimer(timer)
+
+      // Limpiar temporizador al desmontar
+      return () => {
+        clearInterval(timer)
+      }
+    } else if (inactivityTimer) {
+      // Si no hay usuario pero hay temporizador, limpiarlo
+      clearInterval(inactivityTimer)
+      setInactivityTimer(null)
+    }
+  }, [user, lastActivity])
 
   // Check for existing session on mount
   useEffect(() => {

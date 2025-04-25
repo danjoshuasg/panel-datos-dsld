@@ -33,14 +33,16 @@ export default function SupervisionDetails({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Format date from ISO to readable format
+  // Modificar la función formatDate para manejar correctamente la zona horaria
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "No disponible"
-    const date = new Date(dateString)
+    // Crear la fecha asegurando que se interprete como UTC
+    const date = new Date(dateString + "T00:00:00Z")
     return date.toLocaleDateString("es-PE", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
+      timeZone: "UTC", // Forzar interpretación UTC
     })
   }
 

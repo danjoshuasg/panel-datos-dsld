@@ -36,11 +36,13 @@ export default function SeguimientoDialog({
   // Format date from ISO to readable format
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "Dato no encontrado"
-    const date = new Date(dateString)
+    // Crear la fecha asegurando que se interprete como UTC
+    const date = new Date(dateString + "T00:00:00Z")
     return date.toLocaleDateString("es-PE", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
+      timeZone: "UTC", // Forzar interpretación UTC
     })
   }
 
