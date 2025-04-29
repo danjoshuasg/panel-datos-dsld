@@ -88,7 +88,7 @@ export function LoginForm({ onSwitchView }: LoginFormProps) {
         <div className="mb-8 text-center">
           <div className="flex justify-center mb-2">
             <img
-              src="https://raw.githubusercontent.com/danjoshuasg/dashboard-dsld/refs/heads/main/DEFENSORITAA.webp"
+              src="https://raw.githubusercontent.com/danjoshuasg/dashboard-dsld-anterior/refs/heads/main/DEFENSORITAA.webp"
               alt="Defensorita"
               className="h-28 w-auto scale-in"
             />
