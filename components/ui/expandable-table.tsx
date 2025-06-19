@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { ChevronDown, ChevronUp } from "lucide-react"
@@ -76,7 +76,7 @@ export function ExpandableTable<T>({
             {data.map((item, rowIndex) => {
               const key = String(item[keyField])
               return (
-                <>
+                <Fragment key={key}>
                   <TableRow
                     key={key}
                     className={`${rowIndex % 2 === 0 ? "bg-white" : "bg-neutral-50"} hover:bg-transparent`}
@@ -92,11 +92,11 @@ export function ExpandableTable<T>({
                         {expandedRows[key] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                       </Button>
                     </TableCell>
-                    {columns.map((column, colIndex) => (
-                      <TableCell key={colIndex} className="text-neutral-700 border-0">
-                        {getCellValue(item, column.accessor)}
-                      </TableCell>
-                    ))}
+                      {columns.map((column, colIndex) => (
+                        <TableCell key={colIndex} className="text-neutral-700 border-0">
+                          {String(getCellValue(item, column.accessor) ?? '')}
+                        </TableCell>
+                      ))}
                     {actions && <TableCell className="text-right border-0">{actions(item)}</TableCell>}
                   </TableRow>
                   {expandedRows[key] && (
@@ -106,7 +106,7 @@ export function ExpandableTable<T>({
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </Fragment>
               )
             })}
           </TableBody>

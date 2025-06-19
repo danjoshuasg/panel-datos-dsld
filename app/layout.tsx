@@ -8,8 +8,8 @@ import { Toaster } from "@/components/ui/toaster"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata = {
-  title: "Panel de datos DSLD",
-  description: "Panel de datos de las DEMUNA - Dirección de Sistemas Locales y Defensorías",
+  title: "Observatorio - DSLD",
+  description: "Observatorio de la Dirección de Sistemas Locales y Defensorías",
   generator: "DSLD",
   icons: {
     icon: "/favicon-32x32.png",
@@ -22,7 +22,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning={true}>
       <head>
         <link rel="icon" href="/favicon.ico" sizes="any" />
       </head>

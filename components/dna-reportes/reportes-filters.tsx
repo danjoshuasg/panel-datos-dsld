@@ -12,6 +12,7 @@ export interface FiltersState {
   estadoAcreditacion: string | null
 }
 
+// Interfaz para los filtros de los reportes
 interface ReportesFiltersProps {
   estadosAcreditacion: EstadoAcreditacion[]
   loading: boolean
@@ -19,6 +20,7 @@ interface ReportesFiltersProps {
   onClear: () => void
 }
 
+// Componente para los filtros de los reportes
 export default function ReportesFilters({ estadosAcreditacion, loading, onSearch, onClear }: ReportesFiltersProps) {
   // Estados para los filtros
   const [selectedUbigeo, setSelectedUbigeo] = useState<string | null>(null)

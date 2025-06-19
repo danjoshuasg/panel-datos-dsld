@@ -90,8 +90,10 @@ class DefensoriasService extends BaseService<Defensoria, DefensoriasSearchParams
     let filteredQuery = query
 
     // Aplicar filtros comunes usando los métodos de la clase base
-    filteredQuery = this.applyUbigeoFilter(filteredQuery, params.ubigeo)
-    filteredQuery = this.applyCodigoDnaFilter(filteredQuery, params.codigoDna)
+    filteredQuery = this.applyUbigeoFilter(filteredQuery, 
+                    params.ubigeo === undefined ? null : params.ubigeo)
+    filteredQuery = this.applyCodigoDnaFilter(filteredQuery, 
+                    params.codigoDna === undefined ? null : params.codigoDna)
 
     // Aplicar filtro de estado de acreditación (específico de este servicio)
     if (params.estadoAcreditacion && params.estadoAcreditacion !== "all") {

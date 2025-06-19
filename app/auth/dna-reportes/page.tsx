@@ -1,12 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
+
+import { TrendingUp, Loader2, BarChart3, PieChartIcon, MapPin, Award, AlertTriangle, Ban } from "lucide-react"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, BarChart3, PieChartIcon, MapPin, Award, AlertTriangle, Ban } from "lucide-react"
+
 import ReportesFilters, { type FiltersState } from "@/components/dna-reportes/reportes-filters"
 import StatsCard from "@/components/dna-reportes/stats-card"
 import PieChart from "@/components/charts/pie-chart"
-import BarChart from "@/components/charts/bar-chart"
+import {GenericBarChart} from "@/components/charts/bar-chart"
 import MapChart from "@/components/charts/map-chart"
 import { defensoriasService, type EstadoAcreditacion } from "@/services/defensorias-service"
 import { dnaReportesService, type DnaStats } from "@/services/dna-reportes-service"
@@ -90,20 +93,19 @@ export default function DnaReportesPage() {
         { label: "No Operativas", value: stats.noOperativas, color: "#3b82f6" },
       ]
     : []
-
+  
   const barChartData = stats
     ? stats.porDepartamento.slice(0, 10).map((dep) => ({
         label: dep.departamento,
         value: dep.cantidad,
-        color: "#9b0000",
       }))
     : []
+
 
   const tipoChartData = stats
     ? stats.porTipo.slice(0, 10).map((tipo, index) => ({
         label: tipo.tipo,
         value: tipo.cantidad,
-        color: `hsl(${index * 30}, 70%, 50%)`,
       }))
     : []
 
@@ -176,6 +178,8 @@ export default function DnaReportesPage() {
       </div>
 
       {/* Gráficos */}
+
+      {/* PIE CHART */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <Card className="border-0 shadow-lg overflow-hidden bg-white/90 backdrop-blur-sm">
           <CardHeader className="bg-neutral-100">
@@ -199,27 +203,19 @@ export default function DnaReportesPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-lg overflow-hidden bg-white/90 backdrop-blur-sm">
-          <CardHeader className="bg-neutral-100">
-            <CardTitle className="flex items-center text-lg">
-              <BarChart3 className="h-5 w-5 mr-2" />
-              Distribución por Departamento (Top 10)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 flex justify-center">
-            {loading ? (
-              <div className="flex justify-center items-center h-[300px]">
-                <Loader2 className="h-8 w-8 animate-spin text-[#9b0000]" />
-              </div>
-            ) : stats?.totalDefensorias === 0 ? (
-              <div className="flex justify-center items-center h-[300px] text-neutral-500">
-                No hay datos disponibles
-              </div>
-            ) : (
-              <BarChart data={barChartData} width={500} height={300} />
-            )}
-          </CardContent>
-        </Card>
+      {/* BARCHART DEPARTAMENTO */}
+        <GenericBarChart
+          data={barChartData}
+          loading={loading}
+          title="Distribución por Departamento (Top 10)"
+          description="Departamentos con más defensorías"
+          icon={BarChart3}
+          color="#9b0000"
+          valueLabel="Cantidad"
+          showFooter={true}
+          totalItems={stats?.totalDefensorias}
+          footerLabel="defensorías"
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -244,28 +240,19 @@ export default function DnaReportesPage() {
             )}
           </CardContent>
         </Card>
+        <GenericBarChart
+          data={tipoChartData}
+          loading={loading}
+          title="Distribución por Tipo de DEMUNA (Top 10)"
+          description="Mostrando los 10 tipos más frecuentes"
+          icon={BarChart3}
+          color="#9b0000"
+          valueLabel="Cantidad"
+          showFooter={true}
+          totalItems={stats?.totalDefensorias}
+          footerLabel="defensorías"
+        />
 
-        <Card className="border-0 shadow-lg overflow-hidden bg-white/90 backdrop-blur-sm">
-          <CardHeader className="bg-neutral-100">
-            <CardTitle className="flex items-center text-lg">
-              <BarChart3 className="h-5 w-5 mr-2" />
-              Distribución por Tipo de DEMUNA (Top 10)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 flex justify-center">
-            {loading ? (
-              <div className="flex justify-center items-center h-[400px]">
-                <Loader2 className="h-8 w-8 animate-spin text-[#9b0000]" />
-              </div>
-            ) : stats?.totalDefensorias === 0 ? (
-              <div className="flex justify-center items-center h-[400px] text-neutral-500">
-                No hay datos disponibles
-              </div>
-            ) : (
-              <BarChart data={tipoChartData} width={500} height={300} />
-            )}
-          </CardContent>
-        </Card>
       </div>
     </div>
   )
